@@ -1,0 +1,6 @@
+{
+  "interval": "1d",
+  "period": "6mo",
+  "atr_period": 14,
+  "n": 10
+}

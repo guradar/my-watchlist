@@ -1,0 +1,42 @@
+[
+  {
+    "code": "600030.SS",
+    "name": "中信证券",
+    "memo": "Down trend"
+  },
+  {
+    "code": "600036.SS",
+    "name": "招商银行",
+    "memo": "Up trend"
+  },
+  {
+    "code": "512880.SS",
+    "name": "证券ETF",
+    "memo": "Down trend"
+  },
+  {
+    "code": "601857.SS",
+    "name": "中国石油",
+    "memo": "上涨趋势"
+  },
+  {
+    "code": "588000.SS",
+    "name": "科创50ETF",
+    "memo": "底部振荡"
+  },
+  {
+    "code": "159915.SZ",
+    "name": "创业板ETF",
+    "memo": "底部振荡"
+  },
+  {
+    "code": "600941.SS",
+    "name": "中国移动",
+    "memo": "上涨趋势"
+  },
+  {
+    "code": "688836.SS",
+    "name": "宇数科技",
+    "memo": "突破前高"
+  }
+]
