@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+<title>Stock Watchlist</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f4f6f8;margin:0;color:#222}
+main{max-width:900px;margin:30px auto;padding:0 16px}
+h1{margin-top:0}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px #0002;padding:16px;margin-bottom:16px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input{padding:8px;border:1px solid #ccc;border-radius:6px;flex:1;min-width:110px}
+button{padding:8px 14px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer}
+button.del{background:#dc2626}button.alt{background:#64748b}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #eee}
+td.act{white-space:nowrap;display:flex;gap:6px}
+.up{color:#16a34a}.down{color:#dc2626}.muted{color:#888}
+.chart{padding:10px 0;text-align:center}.chart img{max-width:100%}
+#err{color:#dc2626;margin-top:8px;min-height:1em}
+#modal{position:fixed;inset:0;background:#0006;display:grid;place-items:center;z-index:10}
+#modal[hidden]{display:none}
+.mbox{background:#fff;border-radius:10px;padding:18px;width:min(26rem,90vw);box-shadow:0 4px 20px #0004}
+.mbox h3{margin:0 0 12px}
+.mfield{margin-bottom:10px}
+.mfield label{display:block;font-size:0.85rem;color:#555;margin-bottom:4px}
+.mfield input,.mfield textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
+.mfield textarea{resize:vertical;min-height:5rem}
+.mbtns{text-align:right}
+</style></head><body><main>
+<h1>📈 Stock Watchlist</h1>
+<div class="card">
+ <form id="f">
+  <input id="code" placeholder="Code (e.g. AAPL, 0700.HK)" required>
+  <input id="name" placeholder="Name (optional)">
+  <input id="memo" placeholder="Memo">
+  <button>Add</button>
+ </form><div id="err"></div>
+</div>
+<div class="card"><table>
+ <thead><tr><th>Code</th><th>Name</th><th>Price</th><th>Memo</th><th></th></tr></thead>
+ <tbody id="rows"></tbody></table>
+ <p id="empty" class="muted" hidden>Watchlist is empty.</p></div>
+<div class="muted" style="text-align:center;margin-top:18px">
+ <button class="alt" data-preset="daily" style="margin:0 6px">daily</button>
+ <button class="alt" data-preset="30min" style="margin:0 6px">30min</button>
+ <a href="/settings">⚙️ Chart Settings</a>
+ <span id="quickmsg" style="margin-left:8px"></span>
+</div>
+<div id="modal" hidden>
+ <div class="mbox">
+  <h3 id="upd_title">Update</h3>
+  <div class="mfield"><label for="upd_name">Name</label>
+  <input id="upd_name" placeholder="Name"></div>
+  <div class="mfield"><label for="upd_memo">Memo（复盘笔记）</label>
+  <textarea id="upd_memo" placeholder="复盘后填写…"></textarea></div>
+  <div class="mbtns"><button id="upd_save">Save</button>
+  <button class="alt" id="upd_cancel" style="margin-left:8px">Cancel</button></div>
+ </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ITEMS=[];
+async function load(){
+  ITEMS=await (await fetch('/api/stocks')).json();
+  const items=ITEMS;
+  $('empty').hidden=items.length>0;
+  $('rows').innerHTML=items.map(s=>`
+   <tr data-code="${esc(s.code)}"><td><b>${esc(s.code)}</b></td><td>${esc(s.name)}</td>
+   <td class="price muted">loading…</td><td>${esc(s.memo)}</td>
+   <td class="act"><button class="alt" data-act="chart">Chart</button>
+   <button class="alt" data-act="renko">Renko</button>
+   <button class="alt" data-act="zxc">ZXC</button>
+   <button class="alt" data-act="upd">Update</button>
+   <button class="del" data-act="del">Delete</button></td></tr>
+   <tr class="crow" hidden><td colspan="5" class="chart"></td></tr>`).join('');
+  items.forEach(async s=>{
+    const td=document.querySelector(`tr[data-code="${CSS.escape(s.code)}"] .price`);
+    try{const r=await fetch('/api/price/'+encodeURIComponent(s.code));
+      if(!r.ok)throw 0;const d=await r.json();
+      td.className='price '+(d.change>=0?'up':'down');
+      let priceStr = d.price.toFixed(3).replace(/0+$/, '');
+      td.textContent=`${priceStr} (${d.change>=0?'+':''}${d.change}%)`;
+    }catch{td.textContent='n/a'}
+  });
+}
+$('f').onsubmit=async e=>{
+  e.preventDefault();$('err').textContent='';
+  const r=await fetch('/api/stocks',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:$('code').value,name:$('name').value,memo:$('memo').value})});
+  if(!r.ok){$('err').textContent=(await r.json()).error;return}
+  $('f').reset();load();
+};
+$('rows').onclick=async e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const tr=b.closest('tr'),code=tr.dataset.code;
+  if(b.dataset.act==='del'){
+    if(!confirm('Delete '+code+'?'))return;
+    await fetch('/api/stocks/'+encodeURIComponent(code),{method:'DELETE'});load();
+  }else if(b.dataset.act==='upd'){
+    openUpdate(code);
+  }else if(b.dataset.act==='chart'||b.dataset.act==='renko'||b.dataset.act==='zxc'){
+    const row=tr.nextElementSibling;
+    if(!row.hidden&&row.dataset.type===b.dataset.act){row.hidden=true;return}
+    openChart(row,b.dataset.act,code);
+  }
+};
+function openChart(row,type,code){
+  row.hidden=false;row.dataset.type=type;
+  const cell=row.firstElementChild;cell.textContent='Loading chart…';
+  const img=new Image();
+  img.onload=()=>{cell.textContent='';cell.append(img)};
+  img.onerror=()=>cell.textContent='Failed to load chart';
+  img.src='/api/'+type+'/'+encodeURIComponent(code)+'.png';
+}
+// 快捷预设按钮：daily=1d/6mo, 30min=30m/1mo（保留当前 atr_period/n）
+const PRESETS={daily:{interval:'1d',period:'6mo'},'30min':{interval:'30m',period:'1mo'}};
+document.querySelectorAll('[data-preset]').forEach(b=>{
+  b.onclick=async e=>{
+    e.preventDefault();
+    const m=$('quickmsg');m.textContent='…';
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(PRESETS[b.dataset.preset])});
+    const d=await r.json();
+    if(!r.ok){m.textContent='failed';return}
+    m.textContent='✓ '+d.interval+' / '+d.period;
+    document.querySelectorAll('#rows tr.crow').forEach(row=>{
+      if(!row.hidden&&row.dataset.type)
+        openChart(row,row.dataset.type,row.previousElementSibling.dataset.code);
+    });
+  };
+});
+// Update（复盘后更新 Name / Memo）
+let UPD_CODE=null;
+function openUpdate(code){
+  const s=ITEMS.find(x=>x.code===code);if(!s)return;
+  UPD_CODE=code;
+  $('upd_title').textContent='Update '+code;
+  $('upd_name').value=s.name||'';
+  $('upd_memo').value=s.memo||'';
+  $('modal').hidden=false;
+  $('upd_memo').focus();
+}
+$('upd_save').onclick=async ()=>{
+  const code=UPD_CODE;
+  const body={name:$('upd_name').value,memo:$('upd_memo').value};
+  const r=await fetch('/api/stocks/'+encodeURIComponent(code),{
+    method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok){alert(d.error||'update failed');return}
+  $('modal').hidden=true;
+  load();
+};
+$('upd_cancel').onclick=()=>$('modal').hidden=true;
+$('modal').addEventListener('click',e=>{if(e.target===$('modal'))$('modal').hidden=true;});
+$('upd_memo').addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter')$('upd_save').click();
+});
+load();
+</script></main></body></html>
+
